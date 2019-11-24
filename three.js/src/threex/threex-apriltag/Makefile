@@ -4,7 +4,8 @@ watch: build
 .PHONY: build
 build:
 	(cd  ../../../vendor/js-apriltag/emscripten && make)
-	cat threex-*.js > build/threex-apriltag.js
+	cat ../../../vendor/js-apriltag/emscripten/apriltag.js \
+	 	threex-*.js > build/threex-apriltag.js
 
 minify: build
 	uglifyjs build/threex-apriltag.js > build/threex-apriltag-min.js

@@ -2968,7 +2968,8 @@ ARjs.Context.prototype._updateApriltag = function(srcElement){
 	var detectedTags = this.apriltagContext.detect(srcElement);
 
 	// TODO: what to do with detected tags
-}var ARjs = ARjs || {}
+}
+var ARjs = ARjs || {}
 var THREEx = THREEx || {}
 
 /**
