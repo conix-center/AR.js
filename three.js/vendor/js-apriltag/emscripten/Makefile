@@ -1,0 +1,8 @@
+# do not compile pywarp and some tag families that take a long time to compile
+APRILTAG_SRCS := $(shell ls apriltag/*.c apriltag/common/*.c | grep -v -e apriltag_pywrap.c -e tagCircle49h12.c -e tagCustom48h12.c -e tagStandard52h13.c)
+
+apriltag.js: $(APRILTAG_SRCS) apriltag_js.c
+	emcc -O3 -s MODULARIZE=1 -s 'EXPORT_NAME="AprilTag"' -s WASM=1 -Iapriltag -s ALLOW_MEMORY_GROWTH=1 -s EXTRA_EXPORTED_RUNTIME_METHODS='["cwrap", "getValue", "setValue"]' -o $@ $^
+	cp apriltag.js ../
+	cp apriltag.wasm ../
+
