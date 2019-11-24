@@ -1,11 +1,5 @@
 # AR.js - Augmented Reality for the Web
 
-<img src="https://github.com/jeromeetienne/AR.js/blob/master/AR.js-1920-1080-HD.png?raw=true" height="200" />
-
-Logo by [Simon Poulter](https://twitter.com/viralinfo)
-
----
-
 AR.js is a lightweight library for Augmented Reality on the Web, coming with features like Marker based and Location based AR.
 
 Check the [official repository](https://github.com/jeromeetienne/AR.js) for more information about AR.js.
@@ -43,4 +37,15 @@ AFRAME.registerComponent('apriltag-event-example', {
 		<a-box position='0 0.5 0' material='opacity: 0.5;'></a-box>
 	</a-scene>
 </body>
+```
+
+Example detection object:
+```
+center: {x: 415.33, y: 415.33}
+corners: Array(4)
+0: {x: 374, y: 365.29}
+1: {x: 456.15, y: 364.56}
+2: {x: 455.15, y: 279.6}
+3: {x: 374.23, y: 278.45}
+id: 586
 ```
