@@ -29,15 +29,16 @@ THREEx.ApriltagContext = function(parameters){
                         create_buffer: Module.cwrap('create_buffer', 'number', ['number']),
                         //void destroy_buffer(uint8_t* p)
                         destroy_buffer: Module.cwrap('destroy_buffer', '', ['number']),
-                        //int initAT(float decimate, float sigma, int nthreads, int refine_edges)
-                        init: Module.cwrap('init', 'number', ['number', 'number', 'number', 'number']),
+                        //int init(float decimate, float sigma, int nthreads, int refine_edges, int return_pose) 
+                        init: Module.cwrap('init', 'number', ['number', 'number', 'number', 'number', 'number']),
                         //uint8_t* set_img_buffer(int width, int height, int stride)
                         set_img_buffer: Module.cwrap('set_img_buffer', 'number', ['number', 'number', 'number']),
                         //uint8_t* detect(int bool_return_pose)
-                        detect: Module.cwrap('detect', 'number', ['number']),
+                        detect: Module.cwrap('detect', 'number', []),
                         Module: Module
                       };                
-                _this.aprilTag.init(_this.parameters.decimate, _this.parameters.sigma, _this.parameters.nthreads, _this.parameters.refine_edges); 
+                // TODO: return pose 
+                _this.aprilTag.init(_this.parameters.decimate, _this.parameters.sigma, _this.parameters.nthreads, _this.parameters.refine_edges, 0); 
         });
 
         /*
@@ -89,7 +90,7 @@ THREEx.ApriltagContext.prototype.detect = function (videoElement) {
         }    
         imgBuffer = _this.aprilTag.set_img_buffer(canvas.width, canvas.height, canvas.width); // set_img_buffer allocates the buffer for image and returns it; just returns the previously allocated buffer if size has not changed
         this.aprilTag.Module.HEAPU8.set(grayscaleImg, imgBuffer); // copy grayscale image data
-        let detectionsBuffer = this.aprilTag.detect(0);
+        let detectionsBuffer = this.aprilTag.detect();
         let detectionsBufferSize =  _this.aprilTag.Module.getValue(detectionsBuffer, "i32");
         if (detectionsBufferSize == 0) {
                 this.aprilTag.destroy_buffer(detectionsBuffer);
