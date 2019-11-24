@@ -87,6 +87,9 @@ ARjs.MarkerControls = THREEx.ArMarkerControls = function(context, object3d, para
 		this._arucoPosit = new POS.Posit(this.parameters.size, _this.context.arucoContext.canvas.width)
 	}else if( _this.context.parameters.trackingBackend === 'tango' ){
 		this._initTango()
+	}else if( _this.context.parameters.trackingBackend === 'apriltag' ){
+		//TODO: 
+		console.log('AprilTag!');
 	}else console.assert(false)
 }
 
@@ -124,6 +127,8 @@ ARjs.MarkerControls.prototype.updateWithModelViewMatrix = function(modelViewMatr
 		// ...
 	}else if( this.context.parameters.trackingBackend === 'tango' ){
 		// ...
+	}else if( this.context.parameters.trackingBackend === 'apriltag' ){
+		// TODO:
 	}else console.assert(false)
 
 

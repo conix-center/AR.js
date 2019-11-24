@@ -435,6 +435,11 @@ ARjs.Source.prototype.onResize	= function(arToolkitContext, renderer, camera){
 		this.copyElementSizeTo(arToolkitContext.arucoContext.canvas)
 	}else if( trackingBackend === 'tango' ){
 		renderer.setSize( window.innerWidth, window.innerHeight )
+	}else if( trackingBackend === 'apriltag' ){
+		this.onResizeElement()
+		this.copyElementSizeTo(renderer.domElement)
+
+		this.copyElementSizeTo(arToolkitContext.apriltagContext.canvas)
 	}else console.assert(false, 'unhandled trackingBackend '+trackingBackend)
 
 
@@ -450,5 +455,8 @@ ARjs.Source.prototype.onResize	= function(arToolkitContext, renderer, camera){
 		var vrDisplay = arToolkitContext._tangoContext.vrDisplay
 		// make camera fit vrDisplay
 		if( vrDisplay && vrDisplay.displayName === "Tango VR Device" ) THREE.WebAR.resizeVRSeeThroughCamera(vrDisplay, camera)
+	}else if( trackingBackend === 'apriltag' ){
+		camera.aspect = renderer.domElement.width / renderer.domElement.height;
+		camera.updateProjectionMatrix();
 	}else console.assert(false, 'unhandled trackingBackend '+trackingBackend)
 }

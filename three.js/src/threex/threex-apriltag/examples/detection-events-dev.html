@@ -1,0 +1,64 @@
+<!-- AR.js by @jerome_etienne - github: https://github.com/jeromeetienne/ar.js - info: https://medium.com/arjs/augmented-reality-in-10-lines-of-html-4e193ea9fdbf -->
+<script src="https://aframe.io/releases/0.8.0/aframe.min.js"></script>
+
+<!-- include ar.js scripts -->
+<script src='../../../../../aframe/src/component-anchor.js'></script>
+<script src='../../../../../aframe/src/component-hit-testing.js'></script>
+<script src='../../../../../aframe/src/location-based/gps-camera-debug.js'></script>
+<script src='../../../../../aframe/src/location-based/gps-camera.js'></script>
+<script src='../../../../../aframe/src/location-based/gps-entity-place.js'></script>
+<script src='../../../../../aframe/src/system-arjs.js'></script>
+
+<!-- include three scripts -->
+<script src='../../../../../three.js/src/threex/threex-apriltag/threex-apriltagcontext.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-apriltag/threex-apriltagdebug.js'></script> 
+
+<script src='../../../../../three.js/vendor/jsartoolkit5/build/artoolkit.min.js'></script>
+<script src='../../../../../three.js/vendor/jsartoolkit5/js/artoolkit.api.js'></script>
+<script src='../../../../../three.js/src/threex/threex-aruco/build/threex-aruco.js'></script>
+<script src='../../../../../three.js/vendor/chromium-tango/THREE.WebAR.js'></script>
+<script src='../../../../../three.js/vendor/signals.min.js'></script>
+<script src='../../../../../three.js/src/markers-area/threex-armultimarkercontrols.js'></script> 
+<script src='../../../../../three.js/src/markers-area/threex-armultimarkerlearning.js'></script> 
+<script src='../../../../../three.js/src/markers-area/threex-armultimarkerutils.js'></script> 
+<script src='../../../../../three.js/src/new-api/arjs-anchor.js'></script> 
+<script src='../../../../../three.js/src/new-api/arjs-debugui.js'></script> 
+<script src='../../../../../three.js/src/new-api/arjs-hittesting.js'></script> 
+<script src='../../../../../three.js/src/new-api/arjs-session.js'></script> 
+<script src='../../../../../three.js/src/new-api/arjs-tangopointcloud.js'></script> 
+<script src='../../../../../three.js/src/new-api/arjs-tangovideomesh.js'></script> 
+<script src='../../../../../three.js/src/new-api/arjs-utils.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-arbasecontrols.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-arclickability.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-armarkercloak.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-armarkercontrols.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-armarkerhelper.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-arsmoothedcontrols.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-artoolkitcontext.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-artoolkitprofile.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-artoolkitsource.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-arvideoinwebgl.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-hittesting-plane.js'></script> 
+<script src='../../../../../three.js/src/threex/threex-hittesting-tango.js'></script> 
+
+<!-- include apriltag scripts -->
+<script src='../../../../vendor/js-apriltag/emscripten/apriltag.js'></script>
+
+<script>
+/* this is a simple example showing how a component can listen to 'apriltag-detection' events */
+AFRAME.registerComponent('apriltag-event-example', {
+  init: function () {
+	// apriltag events are emitted to the scene element (this.el.sceneEl)
+	this.el.sceneEl.addEventListener('apriltag-detection', function (event) {
+		  console.log(event.detail); // detail is an array with the id, corners, center (and pose, if enabled) of each detection
+	});
+  }
+});
+</script>
+		
+<body style='margin : 0px; overflow: hidden;'>
+	<a-scene apriltag-event-example embedded arjs='sourceType: webcam; trackingMethod: apriltag'>
+		<a-box position='0 0.5 0' material='opacity: 0.5;'></a-box>
+	</a-scene>
+</body>
+

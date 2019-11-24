@@ -113,6 +113,10 @@ ARjs.Profile.prototype.defaultMarker = function (trackingBackend) {
         // FIXME temporary placeholder - to reevaluate later
         this.defaultMarkerParameters.type = 'barcode'
         this.defaultMarkerParameters.barcodeValue = 1001
+    } else if (trackingBackend === 'apriltag') {
+        // FIXME temporary placeholder - to reevaluate later
+        //this.defaultMarkerParameters.type = 'barcode'
+        //this.defaultMarkerParameters.barcodeValue = 1001
     } else console.assert(false)
 
     return this

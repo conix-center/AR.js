@@ -3848,6 +3848,182 @@ THREEx.ArucoMarkerGenerator.createCanvas = function(markerId, width){
 	
 	return canvas
 }
+var THREEx = THREEx || {}
+
+//var ApriltagContext = function(parameters) {
+THREEx.ApriltagContext = function(parameters){
+	// handle default parameters
+	parameters = parameters || {}
+	this.parameters = {
+		// TODO: debug - true if one should display artoolkit debug canvas, false otherwise
+		//debug: parameters.debug !== undefined ? parameters.debug : false,
+		// resolution of at which we detect pose in the source image
+		canvasWidth: parameters.canvasWidth !== undefined ? parameters.canvasWidth : 640,
+                canvasHeight: parameters.canvasHeight !== undefined ? parameters.canvasHeight : 480,
+                maxDetectedTags: parameters.maxDetectedTags !== undefined ? parameters.maxDetectedTags : 10,
+                decimate: parameters.decimate !== undefined ? parameters.decimate : 2.0,
+                sigma: parameters.sigme !== undefined ? parameters.sigma : 0.0,
+                nthreads: parameters.nthreads !== undefined ? parameters.nthreads : 1,
+                refine_edges: parameters.refine_edges !== undefined ? parameters.refine_edges : 1,
+	}
+
+        this.sceneEl = document.querySelector('a-scene');
+
+        this.canvas = document.createElement('canvas');
+        this.max_det_points_len = 150 * this.parameters.maxDetectedTags; 
+        _this = this;
+        AprilTag().then(function(Module) {
+                // this is reached when everything is ready, and you can call methods on Module
+                _this.aprilTag = {
+                        //uint8_t* create_buffer(int byte_size)
+                        create_buffer: Module.cwrap('create_buffer', 'number', ['number']),
+                        //void destroy_buffer(uint8_t* p)
+                        destroy_buffer: Module.cwrap('destroy_buffer', '', ['number']),
+                        //int initAT(float decimate, float sigma, int nthreads, int refine_edges)
+                        init: Module.cwrap('init', 'number', ['number', 'number', 'number', 'number']),
+                        //uint8_t* set_img_buffer(int width, int height, int stride)
+                        set_img_buffer: Module.cwrap('set_img_buffer', 'number', ['number', 'number', 'number']),
+                        //uint8_t* detect(int bool_return_pose)
+                        detect: Module.cwrap('detect', 'number', ['number']),
+                        Module: Module
+                      };                
+                _this.aprilTag.init(_this.parameters.decimate, _this.parameters.sigma, _this.parameters.nthreads, _this.parameters.refine_edges); 
+        });
+
+        /*
+        // setup THREEx.ApriltagDebug if needed
+        this.debug = null;
+        if( this.parameters.debug == true ){
+                this.debug = new THREEx.ApriltagDebug(this);
+        }
+	*/
+	// honor parameters.canvasWidth/.canvasHeight
+	this.setSize(this.parameters.canvasWidth, this.parameters.canvasHeight);
+}
+
+THREEx.ApriltagContext.prototype.setSize = function (width, height) {
+        if (this.canvas.width == width && this.canvas.height == height) return;
+
+        this.canvas.width = width;
+        this.canvas.height = height;
+
+        /*
+        if( this.debug !== null ){
+                this.debug.setSize(width, height)
+        }
+        */
+}
+
+THREEx.ApriltagContext.prototype.detect = function (videoElement) {
+        let canvas = this.canvas;
+
+        // get imageData from videoElement
+        let context = canvas.getContext('2d');
+        context.drawImage(videoElement, 0, 0, canvas.width, canvas.height);
+        var imageData = context.getImageData(0, 0, canvas.width, canvas.height);
+        let grayscaleImg = new Uint8Array(canvas.width*canvas.height);
+
+        // compute grayscale pixels
+        for (j=0; j<imageData.height; j++)
+        {
+            for (i=0; i<imageData.width; i++)
+            {
+                let index=(i*4)*imageData.width+(j*4);
+                let red=imageData.data[index];
+                let green=imageData.data[index+1];
+                let blue=imageData.data[index+2];
+                let alpha=imageData.data[index+3];
+                let average=(red+green+blue)/3;
+                grayscaleImg[i*imageData.width+j] = average;                
+            }
+        }    
+        imgBuffer = _this.aprilTag.set_img_buffer(canvas.width, canvas.height, canvas.width); // set_img_buffer allocates the buffer for image and returns it; just returns the previously allocated buffer if size has not changed
+        this.aprilTag.Module.HEAPU8.set(grayscaleImg, imgBuffer); // copy grayscale image data
+        let detectionsBuffer = this.aprilTag.detect(0);
+        let detectionsBufferSize =  _this.aprilTag.Module.getValue(detectionsBuffer, "i32");
+        if (detectionsBufferSize == 0) {
+                this.aprilTag.destroy_buffer(detectionsBuffer);
+                return [];
+        }
+        const resultView = new Uint8Array(this.aprilTag.Module.HEAP8.buffer, detectionsBuffer+4, detectionsBufferSize);
+        let detectionsJson = '';
+        for (let i = 0; i < detectionsBufferSize; i++) {
+                detectionsJson += String.fromCharCode(resultView[i]);
+        }
+        this.aprilTag.destroy_buffer(detectionsBuffer);
+        let detections = JSON.parse(detectionsJson);
+        //console.log(detections);
+        
+        this.sceneEl.emit('apriltag-detection', detections, false);
+        /*
+        if( this.debug !== null ){
+                this.debug.drawDetectedTags(detections);
+        }
+        */
+	return detections;
+};
+
+/**
+ * TODO: crappy function to update a object3d with a detectedMarker 
+ */
+/*
+THREEx.ApriltagContext.prototype.updateObject3D = function(object3D, detectedMarker){
+
+}
+*/var THREEx = THREEx || {}
+
+THREEx.ApriltagDebug = function(apriltagContext){
+	this.apriltagContext = apriltagContext
+
+// TODO to rename canvasElement into canvas
+	this.canvasElement = document.createElement('canvas');
+	this.canvasElement.width = this.apriltagContext.canvas.width
+	this.canvasElement.height = this.apriltagContext.canvas.height
+
+	document.body.appendChild(this.canvasElement );
+}
+
+THREEx.ApriltagDebug.prototype.setSize = function (width, height) {
+        if( this.canvasElement.width !== width )	this.canvasElement.width = width
+        if( this.canvasElement.height !== height )	this.canvasElement.height = height
+}
+
+THREEx.ApriltagDebug.prototype.clear = function(){
+	var canvas = this.canvasElement
+	var context = canvas.getContext('2d');
+	context.clearRect(0,0,canvas.width, canvas.height)
+	
+}
+
+THREEx.ApriltagDebug.prototype.drawDetectedTags = function(detectedTags){
+
+	if (detectedTags.length == 0) return;
+
+	var canvas = this.canvasElement
+
+	var context = canvas.getContext('2d');
+
+	context.save();
+
+	context.strokeStyle = "DODGERBLUE";
+	context.lineWidth = 5;
+
+		for (i=0; i< detectedTags.length; i++) {
+			let det_corners = detectedTags[i].corners; 
+			context.beginPath();
+			context.moveTo(det_corners[0].x, det_corners[0].y);
+			context.lineTo(det_corners[1].x, det_corners[1].y);
+			context.lineTo(det_corners[2].x, det_corners[2].y);
+			context.lineTo(det_corners[3].x, det_corners[3].y);
+			context.lineTo(det_corners[0].x, det_corners[0].y);
+			context.stroke();
+
+			context.strokeText(detectedTags[i].id, detectedTags[i].center.x, detectedTags[i].center.y)
+		}
+
+	context.restore();
+
+}
 /*
  * Copyright 2017 Google Inc. All Rights Reserved.
  * Licensed under the Apache License, Version 2.0 (the "License");
@@ -4829,6 +5005,9 @@ ARjs.MarkerControls = THREEx.ArMarkerControls = function(context, object3d, para
 		this._arucoPosit = new POS.Posit(this.parameters.size, _this.context.arucoContext.canvas.width)
 	}else if( _this.context.parameters.trackingBackend === 'tango' ){
 		this._initTango()
+	}else if( _this.context.parameters.trackingBackend === 'apriltag' ){
+		//TODO: 
+		console.log('AprilTag!');
 	}else console.assert(false)
 }
 
@@ -4866,6 +5045,8 @@ ARjs.MarkerControls.prototype.updateWithModelViewMatrix = function(modelViewMatr
 		// ...
 	}else if( this.context.parameters.trackingBackend === 'tango' ){
 		// ...
+	}else if( this.context.parameters.trackingBackend === 'apriltag' ){
+		// TODO:
 	}else console.assert(false)
 
 
@@ -5240,7 +5421,7 @@ ARjs.Context = THREEx.ArToolkitContext = function(parameters){
 
 	// handle default parameters
 	this.parameters = {
-		// AR backend - ['artoolkit', 'aruco', 'tango']
+		// AR backend - ['artoolkit', 'aruco', 'tango', 'apriltag']
 		trackingBackend: 'artoolkit',
 		// debug - true if one should display artoolkit debug canvas, false otherwise
 		debug: false,
@@ -5266,11 +5447,12 @@ ARjs.Context = THREEx.ArToolkitContext = function(parameters){
 		imageSmoothingEnabled : false,
 	}
 	// parameters sanity check
-	console.assert(['artoolkit', 'aruco', 'tango'].indexOf(this.parameters.trackingBackend) !== -1, 'invalid parameter trackingBackend', this.parameters.trackingBackend)
+	console.assert(['artoolkit', 'aruco', 'tango', 'apriltag'].indexOf(this.parameters.trackingBackend) !== -1, 'invalid parameter trackingBackend', this.parameters.trackingBackend)
 	console.assert(['color', 'color_and_matrix', 'mono', 'mono_and_matrix'].indexOf(this.parameters.detectionMode) !== -1, 'invalid parameter detectionMode', this.parameters.detectionMode)
 
         this.arController = null;
-        this.arucoContext = null;
+		this.arucoContext = null;
+		this.apriltagContext = null;
 
 	_this.initialized = false
 
@@ -5324,6 +5506,8 @@ ARjs.Context.createDefaultCamera = function( trackingBackend ){
 		var camera = new THREE.PerspectiveCamera(42, renderer.domElement.width / renderer.domElement.height, 0.01, 100);
 	}else if( trackingBackend === 'tango' ){
 		var camera = new THREE.PerspectiveCamera(42, renderer.domElement.width / renderer.domElement.height, 0.01, 100);
+	}else if( trackingBackend === 'apriltag' ){
+		var camera = new THREE.PerspectiveCamera(42, renderer.domElement.width / renderer.domElement.height, 0.01, 100);
 	}else console.assert(false)
 	return camera
 }
@@ -5340,6 +5524,8 @@ ARjs.Context.prototype.init = function(onCompleted){
 		this._initAruco(done)
 	}else if( this.parameters.trackingBackend === 'tango' ){
 		this._initTango(done)
+	}else if( this.parameters.trackingBackend === 'apriltag' ){
+		this._initApriltag(done);
 	}else console.assert(false)
 	return
 
@@ -5382,6 +5568,9 @@ ARjs.Context.prototype.update = function(srcElement){
 		this._updateAruco(srcElement)
 	}else if( this.parameters.trackingBackend === 'tango' ){
 		this._updateTango(srcElement)
+	}else if( this.parameters.trackingBackend === 'apriltag' ){
+		//console.log('update');
+		this._updateApriltag(srcElement)
 	}else{
 		console.assert(false)
 	}
@@ -5658,7 +5847,38 @@ ARjs.Context.prototype._updateTango = function(srcElement){
 	// }
 
 }
-var ARjs = ARjs || {}
+
+//////////////////////////////////////////////////////////////////////////////
+//		apriltag specific
+//////////////////////////////////////////////////////////////////////////////
+ARjs.Context.prototype._initApriltag = function(onCompleted){
+	this.apriltagContext = new THREEx.ApriltagContext();
+
+	// honor this.parameters.canvasWidth/.canvasHeight
+	this.apriltagContext.canvas.width = this.parameters.canvasWidth;
+	this.apriltagContext.canvas.height = this.parameters.canvasHeight;
+
+	// honor this.parameters.imageSmoothingEnabled
+	var context = this.apriltagContext.canvas.getContext('2d');
+	// context.mozImageSmoothingEnabled = this.parameters.imageSmoothingEnabled;
+	context.webkitImageSmoothingEnabled = this.parameters.imageSmoothingEnabled;
+	context.msImageSmoothingEnabled = this.parameters.imageSmoothingEnabled;
+	context.imageSmoothingEnabled = this.parameters.imageSmoothingEnabled;
+
+	setTimeout(function(){
+		onCompleted()
+	}, 0)
+
+}
+
+ARjs.Context.prototype._updateApriltag = function(srcElement){
+	// console.log('update apriltag here')
+	var _this = this
+
+	var detectedTags = this.apriltagContext.detect(srcElement);
+
+	// TODO: what to do with detected tags
+}var ARjs = ARjs || {}
 var THREEx = THREEx || {}
 
 /**
@@ -5773,6 +5993,10 @@ ARjs.Profile.prototype.defaultMarker = function (trackingBackend) {
         // FIXME temporary placeholder - to reevaluate later
         this.defaultMarkerParameters.type = 'barcode'
         this.defaultMarkerParameters.barcodeValue = 1001
+    } else if (trackingBackend === 'apriltag') {
+        // FIXME temporary placeholder - to reevaluate later
+        //this.defaultMarkerParameters.type = 'barcode'
+        //this.defaultMarkerParameters.barcodeValue = 1001
     } else console.assert(false)
 
     return this
@@ -6271,6 +6495,11 @@ ARjs.Source.prototype.onResize	= function(arToolkitContext, renderer, camera){
 		this.copyElementSizeTo(arToolkitContext.arucoContext.canvas)
 	}else if( trackingBackend === 'tango' ){
 		renderer.setSize( window.innerWidth, window.innerHeight )
+	}else if( trackingBackend === 'apriltag' ){
+		this.onResizeElement()
+		this.copyElementSizeTo(renderer.domElement)
+
+		this.copyElementSizeTo(arToolkitContext.apriltagContext.canvas)
 	}else console.assert(false, 'unhandled trackingBackend '+trackingBackend)
 
 
@@ -6286,6 +6515,9 @@ ARjs.Source.prototype.onResize	= function(arToolkitContext, renderer, camera){
 		var vrDisplay = arToolkitContext._tangoContext.vrDisplay
 		// make camera fit vrDisplay
 		if( vrDisplay && vrDisplay.displayName === "Tango VR Device" ) THREE.WebAR.resizeVRSeeThroughCamera(vrDisplay, camera)
+	}else if( trackingBackend === 'apriltag' ){
+		camera.aspect = renderer.domElement.width / renderer.domElement.height;
+		camera.updateProjectionMatrix();
 	}else console.assert(false, 'unhandled trackingBackend '+trackingBackend)
 }
 var THREEx = THREEx || {}

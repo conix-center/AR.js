@@ -3,6 +3,4 @@ APRILTAG_SRCS := $(shell ls apriltag/*.c apriltag/common/*.c | grep -v -e aprilt
 
 apriltag.js: $(APRILTAG_SRCS) apriltag_js.c
 	emcc -O3 -s MODULARIZE=1 -s 'EXPORT_NAME="AprilTag"' -s WASM=1 -Iapriltag -s ALLOW_MEMORY_GROWTH=1 -s EXTRA_EXPORTED_RUNTIME_METHODS='["cwrap", "getValue", "setValue"]' -o $@ $^
-	cp apriltag.js ../
-	cp apriltag.wasm ../
 

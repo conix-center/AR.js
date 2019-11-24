@@ -2095,6 +2095,9 @@ ARjs.MarkerControls = THREEx.ArMarkerControls = function(context, object3d, para
 		this._arucoPosit = new POS.Posit(this.parameters.size, _this.context.arucoContext.canvas.width)
 	}else if( _this.context.parameters.trackingBackend === 'tango' ){
 		this._initTango()
+	}else if( _this.context.parameters.trackingBackend === 'apriltag' ){
+		//TODO: 
+		console.log('AprilTag!');
 	}else console.assert(false)
 }
 
@@ -2132,6 +2135,8 @@ ARjs.MarkerControls.prototype.updateWithModelViewMatrix = function(modelViewMatr
 		// ...
 	}else if( this.context.parameters.trackingBackend === 'tango' ){
 		// ...
+	}else if( this.context.parameters.trackingBackend === 'apriltag' ){
+		// TODO:
 	}else console.assert(false)
 
 
@@ -2506,7 +2511,7 @@ ARjs.Context = THREEx.ArToolkitContext = function(parameters){
 
 	// handle default parameters
 	this.parameters = {
-		// AR backend - ['artoolkit', 'aruco', 'tango']
+		// AR backend - ['artoolkit', 'aruco', 'tango', 'apriltag']
 		trackingBackend: 'artoolkit',
 		// debug - true if one should display artoolkit debug canvas, false otherwise
 		debug: false,
@@ -2532,11 +2537,12 @@ ARjs.Context = THREEx.ArToolkitContext = function(parameters){
 		imageSmoothingEnabled : false,
 	}
 	// parameters sanity check
-	console.assert(['artoolkit', 'aruco', 'tango'].indexOf(this.parameters.trackingBackend) !== -1, 'invalid parameter trackingBackend', this.parameters.trackingBackend)
+	console.assert(['artoolkit', 'aruco', 'tango', 'apriltag'].indexOf(this.parameters.trackingBackend) !== -1, 'invalid parameter trackingBackend', this.parameters.trackingBackend)
 	console.assert(['color', 'color_and_matrix', 'mono', 'mono_and_matrix'].indexOf(this.parameters.detectionMode) !== -1, 'invalid parameter detectionMode', this.parameters.detectionMode)
 
         this.arController = null;
-        this.arucoContext = null;
+		this.arucoContext = null;
+		this.apriltagContext = null;
 
 	_this.initialized = false
 
@@ -2590,6 +2596,8 @@ ARjs.Context.createDefaultCamera = function( trackingBackend ){
 		var camera = new THREE.PerspectiveCamera(42, renderer.domElement.width / renderer.domElement.height, 0.01, 100);
 	}else if( trackingBackend === 'tango' ){
 		var camera = new THREE.PerspectiveCamera(42, renderer.domElement.width / renderer.domElement.height, 0.01, 100);
+	}else if( trackingBackend === 'apriltag' ){
+		var camera = new THREE.PerspectiveCamera(42, renderer.domElement.width / renderer.domElement.height, 0.01, 100);
 	}else console.assert(false)
 	return camera
 }
@@ -2606,6 +2614,8 @@ ARjs.Context.prototype.init = function(onCompleted){
 		this._initAruco(done)
 	}else if( this.parameters.trackingBackend === 'tango' ){
 		this._initTango(done)
+	}else if( this.parameters.trackingBackend === 'apriltag' ){
+		this._initApriltag(done);
 	}else console.assert(false)
 	return
 
@@ -2648,6 +2658,9 @@ ARjs.Context.prototype.update = function(srcElement){
 		this._updateAruco(srcElement)
 	}else if( this.parameters.trackingBackend === 'tango' ){
 		this._updateTango(srcElement)
+	}else if( this.parameters.trackingBackend === 'apriltag' ){
+		//console.log('update');
+		this._updateApriltag(srcElement)
 	}else{
 		console.assert(false)
 	}
@@ -2924,7 +2937,38 @@ ARjs.Context.prototype._updateTango = function(srcElement){
 	// }
 
 }
-var ARjs = ARjs || {}
+
+//////////////////////////////////////////////////////////////////////////////
+//		apriltag specific
+//////////////////////////////////////////////////////////////////////////////
+ARjs.Context.prototype._initApriltag = function(onCompleted){
+	this.apriltagContext = new THREEx.ApriltagContext();
+
+	// honor this.parameters.canvasWidth/.canvasHeight
+	this.apriltagContext.canvas.width = this.parameters.canvasWidth;
+	this.apriltagContext.canvas.height = this.parameters.canvasHeight;
+
+	// honor this.parameters.imageSmoothingEnabled
+	var context = this.apriltagContext.canvas.getContext('2d');
+	// context.mozImageSmoothingEnabled = this.parameters.imageSmoothingEnabled;
+	context.webkitImageSmoothingEnabled = this.parameters.imageSmoothingEnabled;
+	context.msImageSmoothingEnabled = this.parameters.imageSmoothingEnabled;
+	context.imageSmoothingEnabled = this.parameters.imageSmoothingEnabled;
+
+	setTimeout(function(){
+		onCompleted()
+	}, 0)
+
+}
+
+ARjs.Context.prototype._updateApriltag = function(srcElement){
+	// console.log('update apriltag here')
+	var _this = this
+
+	var detectedTags = this.apriltagContext.detect(srcElement);
+
+	// TODO: what to do with detected tags
+}var ARjs = ARjs || {}
 var THREEx = THREEx || {}
 
 /**
@@ -3039,6 +3083,10 @@ ARjs.Profile.prototype.defaultMarker = function (trackingBackend) {
         // FIXME temporary placeholder - to reevaluate later
         this.defaultMarkerParameters.type = 'barcode'
         this.defaultMarkerParameters.barcodeValue = 1001
+    } else if (trackingBackend === 'apriltag') {
+        // FIXME temporary placeholder - to reevaluate later
+        //this.defaultMarkerParameters.type = 'barcode'
+        //this.defaultMarkerParameters.barcodeValue = 1001
     } else console.assert(false)
 
     return this
@@ -3537,6 +3585,11 @@ ARjs.Source.prototype.onResize	= function(arToolkitContext, renderer, camera){
 		this.copyElementSizeTo(arToolkitContext.arucoContext.canvas)
 	}else if( trackingBackend === 'tango' ){
 		renderer.setSize( window.innerWidth, window.innerHeight )
+	}else if( trackingBackend === 'apriltag' ){
+		this.onResizeElement()
+		this.copyElementSizeTo(renderer.domElement)
+
+		this.copyElementSizeTo(arToolkitContext.apriltagContext.canvas)
 	}else console.assert(false, 'unhandled trackingBackend '+trackingBackend)
 
 
@@ -3552,6 +3605,9 @@ ARjs.Source.prototype.onResize	= function(arToolkitContext, renderer, camera){
 		var vrDisplay = arToolkitContext._tangoContext.vrDisplay
 		// make camera fit vrDisplay
 		if( vrDisplay && vrDisplay.displayName === "Tango VR Device" ) THREE.WebAR.resizeVRSeeThroughCamera(vrDisplay, camera)
+	}else if( trackingBackend === 'apriltag' ){
+		camera.aspect = renderer.domElement.width / renderer.domElement.height;
+		camera.updateProjectionMatrix();
 	}else console.assert(false, 'unhandled trackingBackend '+trackingBackend)
 }
 var THREEx = THREEx || {}

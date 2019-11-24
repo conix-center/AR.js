@@ -1,0 +1,26 @@
+<!-- AR.js by @jerome_etienne - github: https://github.com/jeromeetienne/ar.js - info: https://medium.com/arjs/augmented-reality-in-10-lines-of-html-4e193ea9fdbf -->
+<script src="https://aframe.io/releases/0.8.0/aframe.min.js"></script>
+
+<!-- include ar.js scripts -->
+<script src="https://spatial.andrew.cmu.edu/AR.js/aframe/build/aframe-ar.js"></script>
+
+<script src='../../../../vendor/js-apriltag/emscripten/apriltag.js'></script>
+
+<script>
+/* this is a simple example showing how a component can listen to 'apriltag-detection' events */
+AFRAME.registerComponent('apriltag-event-example', {
+  init: function () {
+	// apriltag events are emitted to the scene element (this.el.sceneEl)
+	this.el.sceneEl.addEventListener('apriltag-detection', function (event) {
+		  console.log(event.detail); // detail is an array with the id, corners, center (and pose, if enabled) of each detection
+	});
+  }
+});
+</script>
+		
+<body style='margin : 0px; overflow: hidden;'>
+	<a-scene apriltag-event-example embedded arjs='sourceType: webcam; trackingMethod: apriltag'>
+		<a-box position='0 0.5 0' material='opacity: 0.5;'></a-box>
+	</a-scene>
+</body>
+
