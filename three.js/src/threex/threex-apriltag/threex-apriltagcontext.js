@@ -15,6 +15,8 @@ THREEx.ApriltagContext = function(parameters){
                 sigma: parameters.sigme !== undefined ? parameters.sigma : 0.0,
                 nthreads: parameters.nthreads !== undefined ? parameters.nthreads : 1,
                 refine_edges: parameters.refine_edges !== undefined ? parameters.refine_edges : 1,
+                tag_size_meters: parameters.tag_size_meters !== undefined ? parameters.tag_size_meters : 0.1,
+                camera_matrix: parameters.camera_matrix !== undefined ? parameters.camera_matrix : [[1466.857817,0.0,1984.688899],[0.0,1475.411916,1234.781818],[0.0,0.0,1.0]]
 	}
 
         this.sceneEl = document.querySelector('a-scene');
@@ -23,22 +25,44 @@ THREEx.ApriltagContext = function(parameters){
         this.max_det_points_len = 150 * this.parameters.maxDetectedTags; 
         _this = this;
         AprilTag().then(function(Module) {
-                // this is reached when everything is ready, and you can call methods on Module
+                // this is reached when everything is ready
+                // init aprilTag object with calls to wasm module and some othe useful info
                 _this.aprilTag = {
-                        //uint8_t* create_buffer(int byte_size)
-                        create_buffer: Module.cwrap('create_buffer', 'number', ['number']),
-                        //void destroy_buffer(uint8_t* p)
-                        destroy_buffer: Module.cwrap('destroy_buffer', '', ['number']),
-                        //int init(float decimate, float sigma, int nthreads, int refine_edges, int return_pose) 
+                        // save a reference to the module here
+                        Module: Module,
+                        
+                        //int init(); Init the apriltag detector with given family and default options 
                         init: Module.cwrap('init', 'number', ['number', 'number', 'number', 'number', 'number']),
-                        //uint8_t* set_img_buffer(int width, int height, int stride)
+                        //int destroy(); Releases resources allocated by the wasm module
+                        destroy: Module.cwrap('destroy', 'number', []),
+                        //int set_detector_options(float decimate, float sigma, int nthreads, int refine_edges, int return_pose); Sets the given detector options
+                        set_detector_options: Module.cwrap('set_detector_options', 'number', ['number', 'number', 'number', 'number', 'number']),
+                        //int set_pose_info(double tagsize, double fx, double fy, double cx, double cy); Sets the tag size (meters) and camera intrinsics (in pixels) for tag pose estimation
+                        set_pose_info: Module.cwrap('set_pose_info', 'number', ['number', 'number', 'number', 'number', 'number']),
+                        //uint8_t* set_img_buffer(int width, int height, int stride); Creates/changes size of the image buffer where we receive the images to process
                         set_img_buffer: Module.cwrap('set_img_buffer', 'number', ['number', 'number', 'number']),
-                        //uint8_t* detect(int bool_return_pose)
+                        //uint8_t* detect(int bool_return_pose); Detect tags in image previously stored in the buffer. 
+                        //returns pointer to buffer starting with an int32 indicating the size of the remaining buffer (a string of chars with the json describing the detections)
                         detect: Module.cwrap('detect', 'number', []),
-                        Module: Module
+
+                        // free convenience function
+                        destroy_buffer: function(buf_ptr) {
+                                this.Module._free(buf_ptr);
+                        },
+
+                        // supported tag families
+                        family_id: {
+                                tag36h11: 0,
+                                tag25h9: 1,
+                                tag16h5: 2,
+                                tagCircle21h7: 3,
+                                tagStandard41h12: 4
+                        }
                       };                
-                // TODO: return pose 
-                _this.aprilTag.init(_this.parameters.decimate, _this.parameters.sigma, _this.parameters.nthreads, _this.parameters.refine_edges, 0); 
+                // inits detector with given family and default options: quad_decimate=2.0; quad_sigma=0.0; nthreads=1; refine_edges=1; return_pose=1
+                _this.aprilTag.init(_this.aprilTag.family_id.tag36h11); // NOTE: no need to set_detector_options() if javasctipt options are different from default..
+                // sets tag size and camera intrinsics for pose estimation
+                //_this.aprilTag.set_pose_info(_this.parameters.tag_size_meters, _this.parameters.camera_matrix[0][0], _this.parameters.camera_matrix[1][1], _this.parameters.camera_matrix[0][2], _this.parameters.camera_matrix[1][2]);  
         });
 
         /*
@@ -91,7 +115,11 @@ THREEx.ApriltagContext.prototype.detect = function (videoElement) {
         imgBuffer = _this.aprilTag.set_img_buffer(canvas.width, canvas.height, canvas.width); // set_img_buffer allocates the buffer for image and returns it; just returns the previously allocated buffer if size has not changed
         this.aprilTag.Module.HEAPU8.set(grayscaleImg, imgBuffer); // copy grayscale image data
         let detectionsBuffer = this.aprilTag.detect();
-        let detectionsBufferSize =  _this.aprilTag.Module.getValue(detectionsBuffer, "i32");
+        if (detectionsBuffer == 0) {
+                this.aprilTag.destroy_buffer(detectionsBuffer);
+                return [];                
+        }
+        let detectionsBufferSize = _this.aprilTag.Module.getValue(detectionsBuffer, "i32");
         if (detectionsBufferSize == 0) {
                 this.aprilTag.destroy_buffer(detectionsBuffer);
                 return [];

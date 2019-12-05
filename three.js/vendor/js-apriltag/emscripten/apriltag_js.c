@@ -47,6 +47,7 @@ either expressed or implied, of the Regents of The University of Michigan.
 #include <unistd.h>
 #include <math.h>
 #include "apriltag.h"
+#include "apriltag_pose.h"
 #include "tag36h11.h"
 #include "tag25h9.h"
 #include "tag16h5.h"
@@ -64,11 +65,13 @@ either expressed or implied, of the Regents of The University of Michigan.
 
 // json format string for the 4 points
 const char fmt_det_point[] = "{\"id\":%d, \"corners\": [{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f}], \"center\": {\"x\":%.2f,\"y\":%.2f} }";
-const char fmt_det_point_pose[] = "{\"id\":%d, \"corners\": [{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f}], \"center\": {\"x\":%.2f,\"y\":%.2f}, \"pose\": { \"R\": [[%.2f,%.2f,%.2f],[%.2f,%.2f,%.2f],[%.2f,%.2f,%.2f]], \"t\": [[%.2f,%.2f,%.2f],[%.2f,%.2f,%.2f],[%.2f,%.2f,%.2f]] } }";
+const char fmt_det_point_pose[] = "{\"id\":%d, \"corners\": [{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f},{\"x\":%.2f,\"y\":%.2f}], \"center\": {\"x\":%.2f,\"y\":%.2f}, \"pose\": { \"R\": [[%f,%f,%f],[%f,%f,%f],[%f,%f,%f]], \"t\": [%f,%f,%f] } }";
 
 // global pointers to the tag family and detector
-apriltag_family_t * g_tf;
-apriltag_detector_t * g_td;
+apriltag_family_t *g_tf=NULL;
+apriltag_detector_t *g_td;
+
+enum tag_family {tag36h11=0, tag25h9, tag16h5, tagCircle21h7, tagStandard41h12}; 
 
 // size oand stride f the image to process
 int g_width;
@@ -76,84 +79,54 @@ int g_height;
 int g_stride;
 
 // pointer to the image grayscale pixes
-uint8_t * g_img_buf = NULL;
+uint8_t *g_img_buf = NULL;
 
-// if we are returning pose (TODO)
+// if we are returning pose (=0 does not output pose; putput pose otherwise)
 int g_bool_return_pose = 0;
 
-/**
- * @brief Init the apriltag detector with given options
- *
- * @param decimate Decimate input image by this factor
- * @param sigma Apply low-pass blur to input; negative sharpens
- * @param nthreads Use this many CPU threads
- * @param refine_edges Spend more time trying to align edges of tags
- * @param return_pose Detect returns pose of detected tags (0=does no return pose; returns pose otherwise)
- * 
- * @return 0=success
- */
-EMSCRIPTEN_KEEPALIVE
-int init(float decimate, float sigma, int nthreads, int refine_edges, int return_pose) {
-  g_tf = tag36h11_create();
-  g_td = apriltag_detector_create();
-  apriltag_detector_add_family_bits(g_td, g_tf, 1); // "Detect tags with up to this many bit errors.
-  g_td-> quad_decimate = decimate; 
-  g_td-> quad_sigma = sigma; 
-  g_td-> nthreads = nthreads; 
-  g_td-> debug = 0; // Enable debugging output (slow)
-  g_td-> refine_edges = refine_edges;
-  g_bool_return_pose = return_pose; 
-  return 0;
-}
+// defaults to a 10cm tag and camera intrinsics of a moto g6
+apriltag_detection_info_t g_det_pose_info = {NULL, 0.1, 1466.857817, 1475.411916, 1984.688899, 1234.781818};
 
 /**
- * @brief Sets the given options; utilty function to change options after init
- *
- * @param decimate Decimate input image by this factor
- * @param sigma Apply low-pass blur to input; negative sharpens
- * @param nthreads Use this many CPU threads
- * @param refine_edges Spend more time trying to align edges of tags
- * @param return_pose Detect returns pose of detected tags (0=does no return pose; returns pose otherwise)
+ * @brief Init the apriltag detector with given family and default options 
+ * default options: quad_decimate=2.0; quad_sigma=0.0; nthreads=1; refine_edges=1; return_pose=1
+ * @sa set_detector_options for meaning of options
  * 
- * @return 0=success
+ * @return 0=success; -1 on failure
  */
 EMSCRIPTEN_KEEPALIVE
-int set_options(float decimate, float sigma, int nthreads, int refine_edges, int return_pose) {
-  g_td-> quad_decimate = decimate; 
-  g_td-> quad_sigma = sigma; 
-  g_td-> nthreads = nthreads; 
-  g_td-> refine_edges = refine_edges; 
-  g_bool_return_pose = return_pose; 
-  return 0;
-}
-
-
-/**
- * @brief Creates/changes size of the image buffer where we receive the images to process; only returns the pointer if size did not change
- *
- * @param width Width of the image
- * @param height Height of the image
- * @param stride How many pixels per row (=width typically)
- * 
- * @return the pointer to the image buffer 
- *
- * @warning caller of detect is responsible for putting *grayscale* image pixels in this buffer
- */
-EMSCRIPTEN_KEEPALIVE
-uint8_t * set_img_buffer(int width, int height, int stride) {
-  if (g_img_buf != NULL) {
-    if (g_width == width && g_height == height) return g_img_buf;
-    free(g_img_buf);
-    g_width = width;
-    g_height = height;
-    g_img_buf = (uint8_t * ) malloc(width * height);
+int init(int tag_family) {
+  if (tag_family == tag36h11) {
+      g_tf = tag36h11_create();
+  } else if (tag_family == tag25h9) {
+      g_tf = tag25h9_create();
+  } else if (tag_family == tag16h5) {
+      g_tf = tag16h5_create();
+  } else if (tag_family == tagCircle21h7) {
+      g_tf = tagCircle21h7_create();
+  } else if (tag_family == tagStandard41h12) {
+      g_tf = tagStandard41h12_create();
   } else {
-    g_width = width;
-    g_height = height;
-    g_stride = stride;
-    g_img_buf = (uint8_t * ) malloc(width * height);
+      printf("Unrecognized tag family.\n");
+      return -1;
   }
-  return g_img_buf;
+  if (g_tf == NULL) {
+      printf("Error initializing tag family.");
+      return -1;
+  }
+  g_td = apriltag_detector_create();
+  if (g_td == NULL) {
+      printf("Error initializing detector.");
+      return -1;
+  }  
+  apriltag_detector_add_family_bits(g_td, g_tf, 1);
+  g_td->quad_decimate = 2.0; 
+  g_td->quad_sigma = 0.0; 
+  g_td->nthreads = 1; 
+  g_td->debug = 0; // Enable debugging output (slow)
+  g_td->refine_edges = 1;
+  g_bool_return_pose = 1; 
+  return 0;
 }
 
 /**
@@ -170,15 +143,92 @@ int destroy() {
 }
 
 /**
+ * @brief Sets the given detector options
+ * 
+ * @param decimate Decimate input image by this factor
+ * @param sigma Apply low-pass blur to input; negative sharpens
+ * @param nthreads Use this many CPU threads
+ * @param refine_edges Spend more time trying to align edges of tags
+ * @param return_pose Detect returns pose of detected tags (0=does no return pose; returns pose otherwise)
+ * 
+ * @return 0=success
+ */
+EMSCRIPTEN_KEEPALIVE
+int set_detector_options(float decimate, float sigma, int nthreads, int refine_edges, int return_pose) {
+  g_td->quad_decimate = decimate; 
+  g_td->quad_sigma = sigma; 
+  g_td->nthreads = nthreads; 
+  g_td->refine_edges = refine_edges; 
+  g_bool_return_pose = return_pose; 
+  return 0;
+}
+
+/**
+ * @brief Sets the tag size (meters) and camera intrinsics (in pixels) for tag pose estimation
+ *
+ * @param tagsize tagsize in meters
+ * @param fx x focal lenght in pixels
+ * @param fy y focal lenght in pixels
+ * @param cx x principal point in pixels
+ * @param cy y principal point in pixels
+ * 
+ * @return 0=success
+ */
+EMSCRIPTEN_KEEPALIVE
+int set_pose_info(double tagsize, double fx, double fy, double cx, double cy) {
+  g_det_pose_info.tagsize = tagsize;
+  g_det_pose_info.fx = fx;
+  g_det_pose_info.fy = fy;
+  g_det_pose_info.cx = cx;
+  g_det_pose_info.cy = cy;
+  return 0;
+}
+
+/**
+ * @brief Creates/changes size of the image buffer where we receive the images to process
+ *
+ * @param width Width of the image
+ * @param height Height of the image
+ * @param stride How many pixels per row (=width typically)
+ * 
+ * @return the pointer to the image buffer 
+ *
+ * @warning caller of detect is responsible for putting *grayscale* image pixels in this buffer
+ */
+EMSCRIPTEN_KEEPALIVE
+uint8_t * set_img_buffer(int width, int height, int stride) {
+  if (g_img_buf != NULL) {
+    if (g_width == width && g_height == height) return g_img_buf;
+    free(g_img_buf);
+    g_width = width;
+    g_height = height;
+    g_stride = stride;
+    g_img_buf = (uint8_t *) malloc(width * height);
+  } else {
+    g_width = width;
+    g_height = height;
+    g_stride = stride;
+    g_img_buf = (uint8_t *) malloc(width * height);
+  }
+  return g_img_buf;
+}
+
+/**
  * @brief Detect tags in image stored in the buffer (g_img_buf)
  *
- * @return json string with id, corners, center, and pose of each detected tag; must be release by caller
+ * @return buffer starting with an int32 indication the size of the following json string with id, corners, center, and pose of each detected tag; must be release by caller
  *
  * @warning caller is responsible for putting *grayscale* image pixels in the input buffer (g_img_buf)
  * @warning caller must release the returned buffer (json string) by calling destroy_buffer()
  */
 EMSCRIPTEN_KEEPALIVE
 uint8_t * detect() {
+
+  if (g_tf == NULL || g_td == NULL) {
+    printf("Detector not initizalized. (did you call init?)");
+    return (uint8_t *)0;
+  }
+
   image_u8_t im = {
     .width = g_width,
     .height = g_height,
@@ -189,17 +239,13 @@ uint8_t * detect() {
   zarray_t * detections = apriltag_detector_detect(g_td, & im);
 
   if (zarray_size(detections) == 0) {
-    int * buffer = malloc(sizeof(int));
-    buffer[0] = 0;
-    return (uint8_t *)buffer;
+    return (uint8_t *)0;
   }
 
-  // TODO: if pose == 1; get pose ..
-
   int str_det_len = zarray_size(detections) * STR_DET_LEN;
-  int * buffer = malloc(str_det_len + sizeof(int));
-  char * str_det = ((char * ) buffer) + sizeof(int);
-  char * str_tmp_det = malloc(STR_DET_LEN);
+  int *buffer = malloc(str_det_len + sizeof(int32_t));
+  char *str_det = ((char * ) buffer) + sizeof(int32_t);
+  char *str_tmp_det = malloc(STR_DET_LEN);
   int llen = str_det_len - 1;
   strcpy(str_det, "[ ");
   llen -= 2; //"[ "
@@ -210,8 +256,13 @@ uint8_t * detect() {
     if (g_bool_return_pose == 0) {
       c = snprintf(str_tmp_det, STR_DET_LEN, fmt_det_point, det->id, det->p[0][0], det->p[0][1], det->p[1][0], det->p[1][1], det->p[2][0], det->p[2][1], det->p[3][0], det->p[3][1], det->c[0], det->c[0]);
     } else {
-      // TODO: if pose == 1; return pose ..
-      c = snprintf(str_tmp_det, STR_DET_LEN, fmt_det_point_pose, det->id, det->p[0][0], det->p[0][1], det->p[1][0], det->p[1][1], det->p[2][0], det->p[2][1], det->p[3][0], det->p[3][1], det->c[0], det->c[0], 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0, 0.0);
+      // return pose ..
+      apriltag_pose_t pose;
+      g_det_pose_info.det = det;
+      estimate_tag_pose(&g_det_pose_info, &pose);
+      c = snprintf(str_tmp_det, STR_DET_LEN, fmt_det_point_pose, det->id, det->p[0][0], det->p[0][1], det->p[1][0], det->p[1][1], det->p[2][0], det->p[2][1], det->p[3][0], det->p[3][1], det->c[0], det->c[0], matd_get(pose.R, 0, 0),matd_get(pose.R, 1, 0),matd_get(pose.R, 2, 0),matd_get(pose.R, 0, 1),matd_get(pose.R, 1, 1),matd_get(pose.R, 2, 1),matd_get(pose.R, 0, 2),matd_get(pose.R, 1, 2),matd_get(pose.R, 2, 2),matd_get(pose.t, 0, 0),matd_get(pose.t, 1, 0),matd_get(pose.t, 2, 0));
+      matd_destroy(pose.R);
+      matd_destroy(pose.t);               
     }
     if (i > 0) {
       strncat(str_det, ", ", llen);

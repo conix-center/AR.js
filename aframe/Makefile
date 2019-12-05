@@ -4,6 +4,7 @@ watch: build
 .PHONY: build
 build:
 	(cd ../three.js/ && make build)
+	(cp ../three.js/vendor/js-apriltag/emscripten/apriltag.wasm build/apriltag.wasm)
 	cat 	../three.js/build/ar.js	\
 		src/component-*.js	\
 		src/location-based/*.js \

@@ -4,6 +4,7 @@ watch: build
 build-main: 
 	(cd src/threex/threex-aruco && make build)
 	(cd src/threex/threex-apriltag && make build)
+	(cp ../three.js/vendor/js-apriltag/emscripten/apriltag.wasm build/apriltag.wasm)
 	echo	> build/ar.js
 	cat 	vendor/jsartoolkit5/build/artoolkit.min.js	\
 		vendor/jsartoolkit5/js/artoolkit.api.js		>> build/ar.js
